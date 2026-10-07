@@ -1,0 +1,47 @@
+{
+  "name": "grants-lifecycle-app",
+  "version": "1.0.0",
+  "description": "Grants Lifecycle Management CAP Application",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@sap/cds": "^8",
+    "@sap/cds-dk": "^8",
+    "@sap-cloud-sdk/http-client": "*",
+    "@ui5/webcomponents": "*",
+    "@ui5/webcomponents-fiori": "*",
+    "@ui5/webcomponents-icons": "*",
+    "axios": "^1.6.0",
+    "express": "^4"
+  },
+  "devDependencies": {
+    "@cap-js/sqlite": "^1"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "dev": "cds watch",
+    "build": "cds build --production",
+    "test": "npx jest --testPathPattern=test/"
+  },
+  "cds": {
+    "requires": {
+      "db": {
+        "kind": "sqlite",
+        "[production]": {
+          "kind": "hana-cloud"
+        }
+      },
+      "auth": {
+        "kind": "xsuaa",
+        "[development]": {
+          "kind": "dummy"
+        }
+      }
+    },
+    "auth": {
+      "passport": {
+        "strategy": "JWT"
+      }
+    }
+  }
+}

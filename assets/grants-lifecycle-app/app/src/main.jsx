@@ -1,0 +1,26 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import '@ui5/webcomponents-fiori/dist/ShellBar.js';
+import '@ui5/webcomponents/dist/Button.js';
+import '@ui5/webcomponents/dist/Card.js';
+import '@ui5/webcomponents/dist/Input.js';
+import '@ui5/webcomponents/dist/Select.js';
+import '@ui5/webcomponents/dist/Option.js';
+import '@ui5/webcomponents/dist/Table.js';
+import '@ui5/webcomponents/dist/TableColumn.js';
+import '@ui5/webcomponents/dist/TableRow.js';
+import '@ui5/webcomponents/dist/TableCell.js';
+import '@ui5/webcomponents/dist/Badge.js';
+import '@ui5/webcomponents/dist/TextArea.js';
+import '@ui5/webcomponents/dist/MessageStrip.js';
+import '@ui5/webcomponents/dist/BusyIndicator.js';
+import '@ui5/webcomponents-fiori/dist/Wizard.js';
+import '@ui5/webcomponents-fiori/dist/WizardStep.js';
+import '@ui5/webcomponents-icons/dist/home.js';
+import '@ui5/webcomponents-icons/dist/add-document.js';
+import '@ui5/webcomponents-icons/dist/list.js';
+import '@ui5/webcomponents-icons/dist/analyze-regions.js';
+import '@ui5/webcomponents-icons/dist/employee.js';
+import App from './App.jsx';
+
+createRoot(document.getElementById('root')).render(<App />);

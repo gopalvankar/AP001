@@ -1,0 +1,11 @@
+apiVersion: solution.sap/v1
+kind: Solution
+
+metadata:
+  name: grants-lifecycle-cecaf
+  version: "1.0.0"
+  description: "Grants Lifecycle Management — applicant portal, automated approval workflow, S/4HANA budget integration, and compliance reporting"
+
+assets:
+  - ref: ./assets/grants-lifecycle-app/asset.yaml
+  - ref: ./assets/workflows/grant-approval-workflow/asset.yaml

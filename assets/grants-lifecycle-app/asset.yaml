@@ -1,0 +1,36 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: grants-lifecycle-app
+  description: Grants Lifecycle Management CAP application — applicant portal, admin console, compliance dashboard, and S/4HANA integration
+  version: "1.0.0"
+
+type: fullstack
+
+sourceRoot: "."
+
+container:
+  buildPath: "."
+  port: 4004
+
+env:
+  NODE_ENV: production
+  PORT: "4004"
+  S4HANA_DESTINATION: S4HANA_DEST
+  WORKFLOW_ENDPOINT: ""
+
+provides:
+  apis:
+    - name: applicant-service
+      kind: rest
+      description: OData service for grant applicants — submit and track applications
+      ordId: customer.build:apiResource:grants-lifecycle-cecaf.grants-lifecycle-app-applicant:v1
+    - name: admin-service
+      kind: rest
+      description: OData service for grant administrators — review, approve, reject and trigger payments
+      ordId: customer.build:apiResource:grants-lifecycle-cecaf.grants-lifecycle-app-admin:v1
+    - name: reporting-service
+      kind: rest
+      description: Read-only reporting service for compliance and program managers
+      ordId: customer.build:apiResource:grants-lifecycle-cecaf.grants-lifecycle-app-reporting:v1

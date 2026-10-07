@@ -1,0 +1,53 @@
+{
+  "xsappname": "grants-lifecycle-app",
+  "tenant-mode": "dedicated",
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.GrantApplicant",
+      "description": "External grant applicant — can submit and track own applications"
+    },
+    {
+      "name": "$XSAPPNAME.GrantAdmin",
+      "description": "Grant administrator — can review, approve and reject applications"
+    },
+    {
+      "name": "$XSAPPNAME.FinanceOfficer",
+      "description": "Finance officer — can check budget and trigger payments"
+    },
+    {
+      "name": "$XSAPPNAME.ComplianceOfficer",
+      "description": "Compliance officer — read-only access to all applications and reports"
+    },
+    {
+      "name": "$XSAPPNAME.ProgramManager",
+      "description": "Program manager — read-only access to portfolio view and reports"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "GrantApplicant",
+      "description": "External Grant Applicant",
+      "scope-references": ["$XSAPPNAME.GrantApplicant"]
+    },
+    {
+      "name": "GrantAdmin",
+      "description": "Grant Administrator",
+      "scope-references": ["$XSAPPNAME.GrantAdmin"]
+    },
+    {
+      "name": "FinanceOfficer",
+      "description": "Finance Officer",
+      "scope-references": ["$XSAPPNAME.FinanceOfficer"]
+    },
+    {
+      "name": "ComplianceOfficer",
+      "description": "Compliance and Reporting Officer",
+      "scope-references": ["$XSAPPNAME.ComplianceOfficer"]
+    },
+    {
+      "name": "ProgramManager",
+      "description": "Grant Program Manager",
+      "scope-references": ["$XSAPPNAME.ProgramManager"]
+    }
+  ]
+}
