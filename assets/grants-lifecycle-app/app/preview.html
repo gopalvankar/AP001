@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grants Lifecycle Management – Preview</title>
+  <!-- React + Babel (no build step needed) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- SAP UI5 Web Components -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents@2/dist/bundle.esm.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents-fiori@2/dist/bundle.esm.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: #f5f6fa; }
+    #root { min-height: 100vh; }
+    .preview-banner {
+      background: #fff3cd; border-bottom: 2px solid #ffc107;
+      padding: 6px 24px; font-size: 12px; color: #856404; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-banner">
+    🔍 <strong>Preview Mode</strong> — All data is simulated. No backend connection required.
+  </div>
+  <div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// ─── Mock Data ────────────────────────────────────────────────────────────────
+const MOCK_GRANTS = [
+  { GrantID: 'GRANT-001', GrantDescription: 'Innovation Fund 2026' },
+  { GrantID: 'GRANT-002', GrantDescription: 'Green Energy Initiative' },
+  { GrantID: 'GRANT-003', GrantDescription: 'SME Development Programme' },
+];
+
+let MOCK_APPS = [
+  { ID: 'app-001', grantId: 'GRANT-001', applicantName: 'Alice Mueller', applicantEmail: 'alice@example.com', orgName: 'TechStart GmbH', requestedAmount: 45000, currency: 'EUR', purpose: 'AI-powered agricultural monitoring system.', status: 'submitted', submittedAt: '2026-03-10T09:00:00Z' },
+  { ID: 'app-002', grantId: 'GRANT-002', applicantName: 'Bob Schmidt', applicantEmail: 'bob@example.com', orgName: 'GreenFuture AG', requestedAmount: 120000, currency: 'EUR', purpose: 'Solar panel microgrids for rural communities.', status: 'under_review', submittedAt: '2026-03-08T14:30:00Z' },
+  { ID: 'app-003', grantId: 'GRANT-003', applicantName: 'Clara Jensen', applicantEmail: 'clara@example.com', orgName: 'Clara Crafts Ltd', requestedAmount: 18500, currency: 'EUR', purpose: 'E-commerce expansion for local artisans.', status: 'approved', submittedAt: '2026-03-05T11:15:00Z' },
+  { ID: 'app-004', grantId: 'GRANT-001', applicantName: 'David Park', applicantEmail: 'david@example.com', orgName: 'DataSpark Inc', requestedAmount: 75000, currency: 'EUR', purpose: 'Real-time analytics for supply chain visibility.', status: 'rejected', submittedAt: '2026-03-01T08:00:00Z', rejectionReason: 'Insufficient project detail and budget justification.' },
+  { ID: 'app-005', grantId: 'GRANT-002', applicantName: 'Eva Richter', applicantEmail: 'eva@example.com', orgName: 'EcoTech Solutions', requestedAmount: 200000, currency: 'EUR', purpose: 'Carbon capture pilot plant construction.', status: 'awarded', submittedAt: '2026-02-20T10:00:00Z' },
+];
+
+let MOCK_PAYMENTS = [
+  { ID: 'pay-001', application_ID: 'app-005', grantId: 'GRANT-002', applicantName: 'Eva Richter', orgName: 'EcoTech Solutions', amount: 200000, currency: 'EUR', applicationStatus: 'awarded', disbursedAt: '2026-03-01T00:00:00Z', s4Reference: 'EF-2026-00123', status: 'processed' },
+  { ID: 'pay-002', application_ID: 'app-003', grantId: 'GRANT-003', applicantName: 'Clara Jensen', orgName: 'Clara Crafts Ltd', amount: 18500, currency: 'EUR', applicationStatus: 'approved', disbursedAt: null, s4Reference: null, status: 'pending' },
+];
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const STATUS_COLOR = {
+  draft: '#8e8e8e', submitted: '#0070f2', under_review: '#e87500',
+  approved: '#1e8e3e', rejected: '#b00020', awarded: '#6200ea'
+};
+const btnStyle = { padding: '10px 24px', background: '#0070f2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 };
+const secondaryBtnStyle = { padding: '10px 24px', background: '#fff', color: '#0070f2', border: '1px solid #0070f2', borderRadius: 4, cursor: 'pointer', fontSize: 14 };
+const labelStyle = { display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#555' };
+const inputStyle = { width: '100%', padding: '8px 12px', border: '1px solid #d0d0d0', borderRadius: 4, fontSize: 14, marginBottom: 16 };
+const cellStyle = { padding: '10px 14px', fontSize: 13, borderBottom: '1px solid #f0f0f0' };
+
+// ─── Grant Application Form ───────────────────────────────────────────────────
+const INITIAL_FORM = { grantId: '', applicantName: '', applicantEmail: '', orgName: '', requestedAmount: '', currency: 'EUR', purpose: '' };
+
+function GrantApplicationForm() {
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState(INITIAL_FORM);
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(null);
+  const [error, setError] = useState(null);
+
+  const update = (field, value) => setForm(f => ({ ...f, [field]: value }));
+
+  function handleSaveDraft() {
+    setLoading(true);
+    setTimeout(() => {
+      const id = 'app-new-' + Date.now();
+      const newApp = { ...form, ID: id, status: 'draft', submittedAt: null, requestedAmount: parseFloat(form.requestedAmount) };
+      MOCK_APPS.push(newApp);
+      setForm(f => ({ ...f, _id: id }));
+      setStep(3); setLoading(false);
+    }, 800);
+  }
+
+  function handleSubmit() {
+    setLoading(true);
+    setTimeout(() => {
+      const app = MOCK_APPS.find(a => a.ID === form._id);
+      if (app) app.status = 'submitted', app.submittedAt = new Date().toISOString();
+      setSubmitted(form._id);
+      setLoading(false);
+    }, 600);
+  }
+
+  if (submitted) return (
+    <div style={{ maxWidth: 600, margin: '40px auto', textAlign: 'center', background: '#fff', borderRadius: 8, padding: 40, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+      <h2 style={{ color: '#1e8e3e' }}>Application Submitted!</h2>
+      <p>Your reference number is:</p>
+      <code style={{ fontSize: 16, background: '#f0f4ff', padding: '8px 16px', borderRadius: 4, display: 'inline-block' }}>{submitted}</code>
+      <p style={{ color: '#666', marginTop: 16 }}>Track it under <strong>My Applications</strong>.</p>
+      <button onClick={() => { setForm(INITIAL_FORM); setStep(0); setSubmitted(null); }} style={{ ...btnStyle, marginTop: 16 }}>Submit Another</button>
+    </div>
+  );
+
+  const steps = ['Grant Selection', 'Applicant Details', 'Project & Budget', 'Review & Submit'];
+  return (
+    <div style={{ maxWidth: 700, margin: '0 auto' }}>
+      <h2>Apply for a Grant</h2>
+      <div style={{ display: 'flex', marginBottom: 32 }}>
+        {steps.map((s, i) => (
+          <div key={s} style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', margin: '0 auto 4px', background: i <= step ? '#0070f2' : '#e0e0e0', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 14 }}>{i + 1}</div>
+            <div style={{ fontSize: 12, color: i === step ? '#0070f2' : '#999' }}>{s}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: '#fff', borderRadius: 8, padding: 32, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        {error && <div style={{ background: '#fff0f0', border: '1px solid #ffcdd2', borderRadius: 4, padding: '8px 16px', marginBottom: 16, color: '#b00020' }}>{error}</div>}
+
+        {step === 0 && <div>
+          <h3>Select Grant Program</h3>
+          <label style={labelStyle}>Grant Program *</label>
+          <select value={form.grantId} onChange={e => update('grantId', e.target.value)} style={inputStyle}>
+            <option value="">-- Select a grant program --</option>
+            {MOCK_GRANTS.map(g => <option key={g.GrantID} value={g.GrantID}>{g.GrantDescription}</option>)}
+          </select>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={() => form.grantId ? (setStep(1), setError(null)) : setError('Please select a grant.')} style={btnStyle}>Next →</button>
+          </div>
+        </div>}
+
+        {step === 1 && <div>
+          <h3>Applicant Details</h3>
+          {[['Your Full Name *', 'applicantName', 'text'], ['Your Email Address *', 'applicantEmail', 'email'], ['Organization Name *', 'orgName', 'text']].map(([lbl, fld, typ]) => (
+            <div key={fld}><label style={labelStyle}>{lbl}</label><input type={typ} value={form[fld]} onChange={e => update(fld, e.target.value)} style={inputStyle} /></div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <button onClick={() => setStep(0)} style={secondaryBtnStyle}>← Back</button>
+            <button onClick={() => (form.applicantName && form.applicantEmail && form.orgName) ? (setStep(2), setError(null)) : setError('Please fill all fields.')} style={btnStyle}>Next →</button>
+          </div>
+        </div>}
+
+        {step === 2 && <div>
+          <h3>Project Description & Budget</h3>
+          <label style={labelStyle}>Project Purpose *</label>
+          <textarea value={form.purpose} onChange={e => update('purpose', e.target.value)} rows={4} placeholder="Describe your project goals..." style={{ ...inputStyle, resize: 'vertical' }} />
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 2 }}><label style={labelStyle}>Requested Amount *</label><input type="number" value={form.requestedAmount} onChange={e => update('requestedAmount', e.target.value)} style={inputStyle} /></div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Currency</label>
+              <select value={form.currency} onChange={e => update('currency', e.target.value)} style={inputStyle}><option>EUR</option><option>USD</option><option>GBP</option></select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <button onClick={() => setStep(1)} style={secondaryBtnStyle}>← Back</button>
+            <button onClick={() => (form.purpose && form.requestedAmount) ? handleSaveDraft() : setError('Please fill all fields.')} disabled={loading} style={btnStyle}>{loading ? 'Saving...' : 'Save & Review →'}</button>
+          </div>
+        </div>}
+
+        {step === 3 && <div>
+          <h3>Review & Submit</h3>
+          {[['Grant Program', MOCK_GRANTS.find(g=>g.GrantID===form.grantId)?.GrantDescription || form.grantId], ['Applicant Name', form.applicantName], ['Email', form.applicantEmail], ['Organization', form.orgName], ['Amount', `${parseFloat(form.requestedAmount).toLocaleString()} ${form.currency}`], ['Purpose', form.purpose]].map(([k,v]) => (
+            <div key={k} style={{ display: 'flex', borderBottom: '1px solid #f0f0f0', padding: '8px 0' }}>
+              <span style={{ flex: 1, fontWeight: 600, color: '#555', fontSize: 13 }}>{k}</span>
+              <span style={{ flex: 2, fontSize: 13 }}>{v}</span>
+            </div>
+          ))}
+          <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 4, padding: 12, marginTop: 16, fontSize: 13 }}>
+            By submitting, you confirm all information is accurate.
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
+            <button onClick={() => setStep(2)} style={secondaryBtnStyle}>← Back</button>
+            <button onClick={handleSubmit} disabled={loading} style={{ ...btnStyle, background: '#1e8e3e' }}>{loading ? 'Submitting...' : '✓ Submit Application'}</button>
+          </div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── My Applications ──────────────────────────────────────────────────────────
+function MyApplicationsList() {
+  const [apps, setApps] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [message, setMessage] = useState(null);
+
+  function load() { setApps([...MOCK_APPS]); }
+  useEffect(() => { load(); }, []);
+
+  function withdraw(id) {
+    if (!window.confirm('Withdraw this application?')) return;
+    const a = MOCK_APPS.find(x => x.ID === id);
+    if (a) a.status = 'draft';
+    setMessage({ type: 'success', text: 'Application withdrawn.' });
+    load(); setSelected(null);
+  }
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h2 style={{ margin: 0 }}>My Applications</h2>
+        <button onClick={load} style={{ padding: '8px 16px', background: '#f5f6fa', border: '1px solid #d0d0d0', borderRadius: 4, cursor: 'pointer' }}>⟳ Refresh</button>
+      </div>
+      {message && <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 4, padding: '8px 16px', marginBottom: 16, color: '#1e8e3e' }}>{message.text}</div>}
+      <div style={{ background: '#fff', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead style={{ background: '#f5f6fa' }}>
+            <tr>{['Reference', 'Grant', 'Organization', 'Amount', 'Status', 'Submitted', 'Actions'].map(h => (
+              <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#555', borderBottom: '1px solid #e0e0e0' }}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {apps.map((app, i) => (
+              <tr key={app.ID} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa', cursor: 'pointer' }} onClick={() => setSelected(selected?.ID === app.ID ? null : app)}>
+                <td style={cellStyle}><code style={{ fontSize: 12 }}>{app.ID.slice(0, 10)}…</code></td>
+                <td style={cellStyle}>{app.grantId}</td>
+                <td style={cellStyle}>{app.orgName}</td>
+                <td style={cellStyle}>{app.requestedAmount?.toLocaleString()} {app.currency}</td>
+                <td style={cellStyle}><span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, color: '#fff', background: STATUS_COLOR[app.status] || '#999' }}>{app.status?.replace(/_/g, ' ').toUpperCase()}</span></td>
+                <td style={cellStyle}>{app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—'}</td>
+                <td style={cellStyle} onClick={e => e.stopPropagation()}>
+                  {['submitted', 'under_review'].includes(app.status) && (
+                    <button onClick={() => withdraw(app.ID)} style={{ fontSize: 12, padding: '4px 10px', color: '#b00020', border: '1px solid #ffcdd2', background: '#fff0f0', borderRadius: 4, cursor: 'pointer' }}>Withdraw</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {selected && (
+          <div style={{ borderTop: '2px solid #0070f2', padding: 24, background: '#f0f7ff' }}>
+            <h3 style={{ marginTop: 0 }}>Detail — {selected.ID.slice(0, 10)}…</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {[['Applicant', selected.applicantName], ['Email', selected.applicantEmail], ['Organization', selected.orgName], ['Grant ID', selected.grantId], ['Amount', `${selected.requestedAmount?.toLocaleString()} ${selected.currency}`], ['Status', selected.status?.replace(/_/g, ' ')]].map(([k,v]) => (
+                <div key={k}><span style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase' }}>{k}</span><div style={{ fontSize: 13, marginTop: 2 }}>{v || '—'}</div></div>
+              ))}
+            </div>
+            {selected.purpose && <div style={{ marginTop: 12 }}><strong style={{ fontSize: 12, color: '#555' }}>Purpose:</strong><p style={{ margin: '4px 0', fontSize: 13 }}>{selected.purpose}</p></div>}
+            {selected.rejectionReason && <div style={{ marginTop: 12, background: '#fff0f0', border: '1px solid #ffcdd2', borderRadius: 4, padding: 12 }}><strong style={{ fontSize: 12, color: '#b00020' }}>Rejection Reason:</strong><p style={{ margin: '4px 0', fontSize: 13 }}>{selected.rejectionReason}</p></div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Admin Dashboard ──────────────────────────────────────────────────────────
+function AdminDashboard() {
+  const [apps, setApps] = useState([...MOCK_APPS]);
+  const [selected, setSelected] = useState(null);
+  const [budgetInfo, setBudgetInfo] = useState(null);
+  const [budgetLoading, setBudgetLoading] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [message, setMessage] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  function load() { setApps(statusFilter === 'all' ? [...MOCK_APPS] : MOCK_APPS.filter(a => a.status === statusFilter)); }
+  useEffect(() => { load(); }, [statusFilter]);
+
+  function checkBudget(app) {
+    setBudgetLoading(true); setBudgetInfo(null);
+    setTimeout(() => {
+      const available = app.requestedAmount <= 50000 ? 80000 : 180000;
+      setBudgetInfo({ sufficient: app.requestedAmount <= available, available, requested: app.requestedAmount, budgetAccountId: 'BA-2026-INV' });
+      setBudgetLoading(false);
+    }, 800);
+  }
+
+  function approve(id) {
+    const a = MOCK_APPS.find(x => x.ID === id);
+    if (a) a.status = 'approved';
+    setMessage({ type: 'success', text: 'Application approved.' });
+    setSelected(null); setBudgetInfo(null); load();
+  }
+
+  function reject(id) {
+    if (!rejectReason || rejectReason.length < 10) { setMessage({ type: 'error', text: 'Rejection reason must be at least 10 characters.' }); return; }
+    const a = MOCK_APPS.find(x => x.ID === id);
+    if (a) { a.status = 'rejected'; a.rejectionReason = rejectReason; }
+    setMessage({ type: 'success', text: 'Application rejected.' });
+    setSelected(null); setRejectReason(''); load();
+  }
+
+  function triggerPayment(id, amount, currency) {
+    const a = MOCK_APPS.find(x => x.ID === id);
+    if (a) a.status = 'awarded';
+    const ref = 'EF-2026-' + Math.floor(Math.random() * 90000 + 10000);
+    MOCK_PAYMENTS.push({ ID: 'pay-' + Date.now(), application_ID: id, grantId: a?.grantId, applicantName: a?.applicantName, orgName: a?.orgName, amount, currency, applicationStatus: 'awarded', disbursedAt: new Date().toISOString(), s4Reference: ref, status: 'processed' });
+    setMessage({ type: 'success', text: `Payment triggered. S/4HANA Earmarked Fund: ${ref}` });
+    setSelected(null); load();
+  }
+
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <h2>Grant Administration Console</h2>
+      {message && (
+        <div style={{ background: message.type === 'success' ? '#e8f5e9' : '#fff0f0', border: '1px solid', borderColor: message.type === 'success' ? '#a5d6a7' : '#ffcdd2', borderRadius: 4, padding: '8px 16px', marginBottom: 16, color: message.type === 'success' ? '#1e8e3e' : '#b00020', display: 'flex', justifyContent: 'space-between' }}>
+          <span>{message.text}</span><button onClick={() => setMessage(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontWeight: 700 }}>✕</button>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {['all', 'submitted', 'under_review', 'approved', 'rejected', 'awarded'].map(s => (
+          <button key={s} onClick={() => setStatusFilter(s)} style={{ padding: '6px 14px', fontSize: 12, borderRadius: 14, cursor: 'pointer', border: 'none', background: statusFilter === s ? '#0070f2' : '#e0e0e0', color: statusFilter === s ? '#fff' : '#333' }}>{s.replace(/_/g, ' ').toUpperCase()}</button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ flex: 2, background: '#fff', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          {apps.length === 0 ? <div style={{ padding: 40, textAlign: 'center', color: '#666' }}>No applications for this filter.</div> : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ background: '#f5f6fa' }}>
+                <tr>{['Applicant', 'Organization', 'Grant', 'Amount', 'Status', 'Submitted'].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#555', borderBottom: '1px solid #e0e0e0' }}>{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {apps.map((app, i) => (
+                  <tr key={app.ID} onClick={() => { setSelected(app); setBudgetInfo(null); setRejectReason(''); }} style={{ background: selected?.ID === app.ID ? '#e8f0fe' : i % 2 === 0 ? '#fff' : '#fafafa', cursor: 'pointer' }}>
+                    <td style={cellStyle}>{app.applicantName}</td>
+                    <td style={cellStyle}>{app.orgName}</td>
+                    <td style={cellStyle}>{app.grantId}</td>
+                    <td style={cellStyle}>{app.requestedAmount?.toLocaleString()} {app.currency}</td>
+                    <td style={cellStyle}><span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, color: '#fff', background: STATUS_COLOR[app.status] || '#999' }}>{app.status?.replace(/_/g, ' ')}</span></td>
+                    <td style={cellStyle}>{app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {selected && (
+          <div style={{ flex: 1, background: '#fff', borderRadius: 8, padding: 24, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', maxHeight: 620, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>Application Detail</h3>
+              <button onClick={() => setSelected(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+            {[['Applicant', selected.applicantName], ['Email', selected.applicantEmail], ['Organization', selected.orgName], ['Grant ID', selected.grantId], ['Amount', `${selected.requestedAmount?.toLocaleString()} ${selected.currency}`], ['Status', selected.status]].map(([k,v]) => (
+              <div key={k} style={{ marginBottom: 8 }}><span style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase' }}>{k}: </span><span style={{ fontSize: 13 }}>{v}</span></div>
+            ))}
+            {selected.purpose && <div style={{ marginTop: 8, fontSize: 13, background: '#f5f6fa', padding: 10, borderRadius: 4 }}><strong>Purpose:</strong><br />{selected.purpose}</div>}
+
+            {['submitted', 'under_review', 'approved'].includes(selected.status) && (
+              <div style={{ marginTop: 16 }}>
+                <button onClick={() => checkBudget(selected)} disabled={budgetLoading} style={{ width: '100%', padding: 8, background: '#f0f4ff', border: '1px solid #0070f2', borderRadius: 4, cursor: 'pointer', fontSize: 13, color: '#0070f2' }}>
+                  {budgetLoading ? 'Checking S/4HANA...' : '💰 Check S/4HANA Budget Availability'}
+                </button>
+                {budgetInfo && (
+                  <div style={{ marginTop: 8, padding: 12, borderRadius: 4, background: budgetInfo.sufficient ? '#e8f5e9' : '#fff0f0', border: `1px solid ${budgetInfo.sufficient ? '#a5d6a7' : '#ffcdd2'}` }}>
+                    <div style={{ fontWeight: 700, color: budgetInfo.sufficient ? '#1e8e3e' : '#b00020', marginBottom: 4 }}>
+                      {budgetInfo.sufficient ? '✅ Budget Available' : '⚠️ Insufficient Budget'}
+                    </div>
+                    <div style={{ fontSize: 12 }}>Available: €{budgetInfo.available?.toLocaleString()} | Requested: €{budgetInfo.requested?.toLocaleString()}</div>
+                  </div>
+                )}
+              </div>
+            )}
+            {['submitted', 'under_review'].includes(selected.status) && (
+              <div style={{ marginTop: 16 }}>
+                <button onClick={() => approve(selected.ID)} style={{ width: '100%', padding: 10, background: '#1e8e3e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', marginBottom: 8 }}>✓ Approve Application</button>
+                <textarea placeholder="Rejection reason (min 10 chars)..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={2} style={{ width: '100%', padding: 8, border: '1px solid #d0d0d0', borderRadius: 4, fontSize: 12, marginBottom: 4 }} />
+                <button onClick={() => reject(selected.ID)} style={{ width: '100%', padding: 10, background: '#b00020', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>✕ Reject Application</button>
+              </div>
+            )}
+            {selected.status === 'approved' && (
+              <div style={{ marginTop: 16 }}>
+                <button onClick={() => triggerPayment(selected.ID, selected.requestedAmount, selected.currency)} style={{ width: '100%', padding: 10, background: '#6200ea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                  💸 Trigger Payment Disbursement
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Compliance Dashboard ─────────────────────────────────────────────────────
+function ComplianceDashboard() {
+  const statusGroups = MOCK_APPS.reduce((acc, a) => { acc[a.status] = (acc[a.status] || 0) + 1; return acc; }, {});
+  const summary = Object.entries(statusGroups).map(([status, count]) => ({
+    status, count,
+    totalRequested: MOCK_APPS.filter(a => a.status === status).reduce((s, a) => s + (a.requestedAmount || 0), 0)
+  }));
+  const [payments] = useState([...MOCK_PAYMENTS]);
+  const totalDisbursed = payments.filter(p => p.status === 'processed').reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const awardedCount = statusGroups['awarded'] || 0;
+  const totalApps = MOCK_APPS.length;
+  const awardRate = totalApps > 0 ? Math.round((awardedCount / totalApps) * 100) : 0;
+
+  function exportCsv() {
+    const headers = ['Application ID', 'Grant ID', 'Applicant', 'Organization', 'Amount', 'Currency', 'Status', 'Disbursed At', 'S/4 Reference'];
+    const rows = payments.map(p => [p.application_ID, p.grantId, p.applicantName, p.orgName, p.amount, p.currency, p.applicationStatus, p.disbursedAt, p.s4Reference].map(v => `"${v || ''}"`).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `grant-payments-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  }
+
+  return (
+    <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+      <h2>Compliance & Reporting Dashboard</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+        {[['📋', 'Total Applications', totalApps, '#0070f2'], ['💶', 'Total Disbursed', `€${totalDisbursed.toLocaleString()}`, '#0070f2'], ['🏆', 'Grants Awarded', awardedCount, '#6200ea'], ['📈', 'Award Rate', `${awardRate}%`, awardRate >= 30 ? '#1e8e3e' : '#e87500']].map(([icon, title, val, color]) => (
+          <div key={title} style={{ background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+            <div style={{ fontSize: 28 }}>{icon}</div>
+            <div style={{ fontSize: 26, fontWeight: 700, color, marginTop: 4 }}>{val}</div>
+            <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>{title}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: '#fff', borderRadius: 8, padding: 24, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 24 }}>
+        <h3 style={{ marginTop: 0 }}>Applications by Status</h3>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {summary.map(row => (
+            <div key={row.status} style={{ textAlign: 'center', minWidth: 110, background: '#f5f6fa', borderRadius: 8, padding: '12px 16px' }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: STATUS_COLOR[row.status] || '#0070f2' }}>{row.count}</div>
+              <div style={{ fontSize: 12, color: '#555', textTransform: 'uppercase', fontWeight: 600 }}>{row.status?.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>€{row.totalRequested?.toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background: '#fff', borderRadius: 8, padding: 24, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ margin: 0 }}>Payment Disbursement History</h3>
+          <button onClick={exportCsv} style={{ padding: '8px 16px', background: '#0070f2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>⬇ Export CSV</button>
+        </div>
+        {payments.length === 0 ? <p style={{ color: '#666' }}>No payment records yet.</p> : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ background: '#f5f6fa' }}>
+              <tr>{['Applicant', 'Organization', 'Grant', 'Amount', 'Disbursed', 'S/4 Reference', 'Status'].map(h => (
+                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#555', borderBottom: '1px solid #e0e0e0' }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {payments.map((p, i) => (
+                <tr key={p.ID} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                  <td style={cellStyle}>{p.applicantName}</td>
+                  <td style={cellStyle}>{p.orgName}</td>
+                  <td style={cellStyle}>{p.grantId}</td>
+                  <td style={cellStyle}>{parseFloat(p.amount).toLocaleString()} {p.currency}</td>
+                  <td style={cellStyle}>{p.disbursedAt ? new Date(p.disbursedAt).toLocaleDateString() : '—'}</td>
+                  <td style={cellStyle}><code style={{ fontSize: 11 }}>{p.s4Reference || '—'}</code></td>
+                  <td style={cellStyle}><span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, background: p.status === 'processed' ? '#e8f5e9' : '#fff8e1', color: p.status === 'processed' ? '#1e8e3e' : '#e87500' }}>{p.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+const ROLES = ['GrantApplicant', 'GrantAdmin', 'FinanceOfficer', 'ComplianceOfficer', 'ProgramManager'];
+
+function App() {
+  const [page, setPage] = useState('home');
+  const [role, setRole] = useState('GrantApplicant');
+
+  const isAdmin = ['GrantAdmin', 'FinanceOfficer'].includes(role);
+  const isCompliance = ['ComplianceOfficer', 'ProgramManager'].includes(role);
+
+  function renderPage() {
+    if (page === 'apply')      return <GrantApplicationForm />;
+    if (page === 'my-apps')    return <MyApplicationsList />;
+    if (page === 'admin')      return isAdmin ? <AdminDashboard /> : <div style={{ padding: 40, textAlign: 'center', color: '#b00020' }}><h2>Access Denied</h2><p>Switch to GrantAdmin or FinanceOfficer role.</p></div>;
+    if (page === 'compliance') return isCompliance ? <ComplianceDashboard /> : <div style={{ padding: 40, textAlign: 'center', color: '#b00020' }}><h2>Access Denied</h2><p>Switch to ComplianceOfficer or ProgramManager role.</p></div>;
+    return (
+      <div>
+        <h2>Welcome to Grants Lifecycle Management</h2>
+        <p style={{ color: '#666', marginBottom: 24 }}>Streamline your grant journey from application to award.</p>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {role === 'GrantApplicant' && [
+            { title: '📝 Apply for a Grant', desc: 'Submit a new grant application online', page: 'apply' },
+            { title: '📋 My Applications', desc: 'Track the status of your submissions', page: 'my-apps' }
+          ].map(c => (
+            <div key={c.page} onClick={() => setPage(c.page)} style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8, padding: 24, cursor: 'pointer', minWidth: 240, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <h3 style={{ margin: '0 0 8px', color: '#0070f2' }}>{c.title}</h3>
+              <p style={{ margin: 0, color: '#666', fontSize: 13 }}>{c.desc}</p>
+            </div>
+          ))}
+          {isAdmin && (
+            <div onClick={() => setPage('admin')} style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8, padding: 24, cursor: 'pointer', minWidth: 240, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <h3 style={{ margin: '0 0 8px', color: '#0070f2' }}>⚙️ Administration Console</h3>
+              <p style={{ margin: 0, color: '#666', fontSize: 13 }}>Review, approve and process grant applications</p>
+            </div>
+          )}
+          {isCompliance && (
+            <div onClick={() => setPage('compliance')} style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8, padding: 24, cursor: 'pointer', minWidth: 240, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <h3 style={{ margin: '0 0 8px', color: '#0070f2' }}>📊 Compliance & Reports</h3>
+              <p style={{ margin: 0, color: '#666', fontSize: 13 }}>Monitor grant performance and compliance</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f5f6fa' }}>
+      {/* Shell Bar */}
+      <div style={{ background: '#0070f2', color: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', height: 44 }}>
+        <span style={{ fontWeight: 700, fontSize: 16 }}>🏛️ Grants Lifecycle Management</span>
+        <span style={{ marginLeft: 'auto', fontSize: 13, opacity: 0.85 }}>Logged in as: {role}</span>
+      </div>
+
+      {/* Role Switcher */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #e0e0e0', padding: '8px 24px', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: '#666', marginRight: 4 }}>Demo Role:</span>
+        {ROLES.map(r => (
+          <button key={r} onClick={() => { setRole(r); setPage('home'); }} style={{ padding: '4px 12px', borderRadius: 4, border: '1px solid', borderColor: role === r ? '#0070f2' : '#ccc', background: role === r ? '#0070f2' : '#fff', color: role === r ? '#fff' : '#333', cursor: 'pointer', fontSize: 12 }}>{r}</button>
+        ))}
+      </div>
+
+      {/* Navigation */}
+      <nav style={{ background: '#fff', borderBottom: '1px solid #e0e0e0', padding: '0 24px', display: 'flex', gap: 4 }}>
+        {[['Home', 'home'], ...(role === 'GrantApplicant' ? [['Apply for Grant', 'apply'], ['My Applications', 'my-apps']] : []), ...(isAdmin ? [['Administration', 'admin']] : []), ...(isCompliance ? [['Compliance & Reports', 'compliance']] : [])].map(([label, p]) => (
+          <button key={p} onClick={() => setPage(p)} style={{ padding: '12px 20px', border: 'none', borderBottom: page === p ? '3px solid #0070f2' : '3px solid transparent', background: 'none', cursor: 'pointer', fontWeight: page === p ? 600 : 400, color: page === p ? '#0070f2' : '#333', fontSize: 14 }}>{label}</button>
+        ))}
+      </nav>
+
+      {/* Content */}
+      <main style={{ padding: 24 }}>{renderPage()}</main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
